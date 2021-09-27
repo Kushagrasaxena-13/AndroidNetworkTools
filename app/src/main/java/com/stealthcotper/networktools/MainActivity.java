@@ -1,11 +1,19 @@
 package com.stealthcotper.networktools;
 
+import android.annotation.SuppressLint;
+import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
+import android.net.wifi.WifiInfo;
+import android.net.wifi.WifiManager;
+import android.os.Build;
 import android.os.Bundle;
+import android.preference.Preference;
+import android.support.annotation.RequiresApi;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -27,8 +35,12 @@ import com.stealthcopter.networktools.subnet.Device;
 
 import java.io.IOException;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.NetworkInterface;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -80,6 +92,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 new Thread(new Runnable() {
+                    @RequiresApi(api = Build.VERSION_CODES.M)
                     @Override
                     public void run() {
                         try {
@@ -208,7 +221,58 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    private void doWakeOnLan() throws IllegalArgumentException {
+//    public String getMacAddr(InetAddress addr) {
+//        String macAddress = "";
+//        try {
+//
+//            NetworkInterface network = NetworkInterface.getByInetAddress(addr);
+//            byte[] macArray = network.getHardwareAddress();
+//            StringBuilder str = new StringBuilder();
+//            for (int i = 0; i < macArray.length; i++) {
+//                str.append(String.format("%02X%s", macArray[i], (i < macArray.length - 1) ? " " : ""));
+//                macAddress = str.toString();
+//            }
+//        } catch (Exception e) {
+//            Log.e("...", e.getStackTrace().toString());
+//        }
+//
+//        if(macAddress!="") {
+//            return macAddress;
+//        }
+//        else{
+//            return null;
+//        }
+//    }
+
+    public static String getMacAddr() {
+        try {
+            List<NetworkInterface> all = Collections.list(NetworkInterface.getNetworkInterfaces());
+            for (NetworkInterface nif : all) {
+                if (!nif.getName().equalsIgnoreCase("wlan0")) continue;
+
+                byte[] macBytes = nif.getHardwareAddress();
+                if (macBytes == null) {
+                    return "";
+                }
+
+                StringBuilder res1 = new StringBuilder();
+                for (byte b : macBytes) {
+                    res1.append(String.format("%02X:",b));
+                }
+
+                if (res1.length() > 0) {
+                    res1.deleteCharAt(res1.length() - 1);
+                }
+                return res1.toString();
+            }
+        } catch (Exception ex) {
+        }
+        return "02:00:00:00:00:00";
+    }
+
+
+    @RequiresApi(api = Build.VERSION_CODES.M)
+    private void doWakeOnLan() throws IllegalArgumentException, UnknownHostException {
         String ipAddress = editIpAddress.getText().toString();
 
         if (TextUtils.isEmpty(ipAddress)) {
@@ -218,10 +282,19 @@ public class MainActivity extends AppCompatActivity {
 
         setEnabled(wolButton, false);
 
+
         appendResultsText("IP address: " + ipAddress);
 
+
         // Get mac address from IP (using arp cache)
-        String macAddress = ARPInfo.getMACFromIPAddress(ipAddress);
+//        String macAddress = ARPInfo.getMACFromIPAddress(ipAddress);
+
+//        InetAddress ip = InetAddress.getByName(onProvideReferrer().getHost());
+
+//        InetAddress inetAddress = InetAddress.getByAddress(getReferrer().getHost(), ip);
+
+       String macAddress = getMacAddr();
+
 
         if (macAddress == null) {
             appendResultsText("Could not fromIPAddress MAC address, cannot send WOL packet without it.");
@@ -229,12 +302,13 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        appendResultsText("MAC address: " + macAddress);
-        appendResultsText("IP address2: " + ARPInfo.getIPAddressFromMAC(macAddress));
+        appendResultsText("MAC address: "+ macAddress);
+//        appendResultsText("IP address2: " + ARPInfo.getIPAddressFromMAC(macAddress.toString()));
+//        appendResultsText("IP address2: " + ipAddress);
 
         // Send Wake on lan packed to ip/mac
         try {
-            WakeOnLan.sendWakeOnLan(ipAddress, macAddress);
+            WakeOnLan.sendWakeOnLan(ipAddress,macAddress.toString());
             appendResultsText("WOL Packet sent");
         } catch (IOException e) {
             appendResultsText(e.getMessage());
@@ -313,6 +387,7 @@ public class MainActivity extends AppCompatActivity {
         inflater.inflate(R.menu.menu_main, menu);
         return true;
     }
+
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
